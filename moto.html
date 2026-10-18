@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>МотоГид PRO</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', sans-serif; }
+        body { background: #121212; color: #fff; padding-bottom: 70px; }
+        
+        .header { padding: 20px; text-align: center; background: linear-gradient(180deg, #1e1e1e, #121212); }
+        .header h1 { font-size: 24px; color: #ff5722; margin-bottom: 5px; }
+        .header p { font-size: 12px; color: #888; }
+
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; padding: 15px; }
+        .card { background: #1e1e1e; border-radius: 15px; overflow: hidden; border: 1px solid #333; position: relative; display: flex; flex-direction: column; }
+        .card-img { height: 120px; background-size: cover; background-position: center; background-color: #333; }
+        .card-info { padding: 10px; display: flex; flex-direction: column; flex-grow: 1; }
+        .card-title { font-size: 14px; font-weight: bold; margin-bottom: 5px; }
+        .card-price { font-size: 15px; color: #00ff88; font-weight: bold; margin-bottom: 5px; }
+        .card-sub { font-size: 10px; color: #aaa; margin-bottom: 8px; flex-grow: 1;}
+        .card-btn { 
+            width: 100%; padding: 8px; border: none; border-radius: 8px; 
+            background: #ff5722; color: #fff; font-weight: bold; cursor: pointer;
+            transition: 0.2s; margin-top: auto;
+        }
+
+        .bottom-nav { 
+            position: fixed; bottom: 0; left: 0; right: 0; 
+            background: #1e1e1e; display: flex; justify-content: space-around; 
+            padding: 10px 0; border-top: 1px solid #333; z-index: 10;
+        }
+        .nav-item { color: #888; font-size: 10px; text-align: center; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 5px; }
+        .nav-item.active { color: #ff5722; }
+        .nav-item span { font-size: 20px; }
+
+        .modal { 
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0; 
+            background: rgba(0,0,0,0.85); display: none; align-items: center; justify-content: center; 
+            padding: 20px; z-index: 100; backdrop-filter: blur(5px);
+        }
+        .modal.show { display: flex; }
+        .modal-content { 
+            background: #1e1e1e; padding: 20px; border-radius: 20px; 
+            width: 100%; max-width: 320px; border: 1px solid #ff5722;
+            max-height: 80vh; overflow-y: auto;
+        }
+        .modal-title { font-size: 18px; color: #ff5722; margin-bottom: 10px; font-weight: bold;}
+        .modal-text { font-size: 13px; margin-bottom: 15px; line-height: 1.5; color: #ccc;}
+        
+        .verdict { padding: 10px; border-radius: 8px; font-weight: bold; font-size: 14px; text-align: center; margin-bottom: 15px;}
+        .verdict.good { background: rgba(0, 255, 136, 0.2); color: #00ff88; border: 1px solid #00ff88;}
+        .verdict.bad { background: rgba(255, 59, 92, 0.2); color: #ff3b5c; border: 1px solid #ff3b5c;}
+        .verdict.warn { background: rgba(255, 193, 7, 0.2); color: #ffc107; border: 1px solid #ffc107;}
+        
+        .modal-btn { padding: 12px; width: 100%; border: none; border-radius: 10px; background: #333; color: #fff; font-weight: bold; cursor: pointer; margin-top: 10px;}
+
+        /* Чек-лист */
+        .check-item { display: flex; justify-content: space-between; align-items: center; background: #2a2a2a; padding: 10px; border-radius: 8px; margin-bottom: 8px;}
+        .check-item span { font-size: 13px; }
+        .check-item input { width: 20px; height: 20px; accent-color: #ff5722; }
+        .calc-btn { background: #00ff88; color: #000; font-weight: bold; width: 100%; padding: 12px; border: none; border-radius: 8px; margin-top: 15px; font-size: 16px; cursor: pointer;}
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>🏍 МотоГид PRO</h1>
+        <p>Каталог и оценка состояния</p>
+    </div>
+
+    <div class="grid" id="catalog"></div>
+
+    <div class="bottom-nav">
+        <div class="nav-item active" onclick="switchTab('best', this)"><span>🔥</span> Лучшее</div>
+        <div class="nav-item" onclick="switchTab('pitbike', this)"><span>🏁</span> Питбайки</div>
+        <div class="nav-item" onclick="switchTab('enduro', this)"><span>⛰️</span> Эндуро</div>
+        <div class="nav-item" onclick="openChecklist(this)"><span>📋</span> Оценка</div>
+    </div>
+
+    <!-- Модалка Анализа Цены -->
+    <div class="modal" id="aiModal">
+        <div class="modal-content">
+            <div class="modal-title" id="aiTitle">Название</div>
+            <div class="modal-text" id="aiSpecs">Характеристики...</div>
+            <div class="verdict" id="aiVerdict">Вердикт</div>
+            <button class="modal-btn" onclick="closeModal('aiModal')">Закрыть</button>
+        </div>
+    </div>
+
+    <!-- Модалка Чек-листа -->
+    <div class="modal" id="checkModal">
+        <div class="modal-content">
+            <div class="modal-title">📋 Оценка мота</div>
+            <div class="modal-text">Отметь пункты, которые в порядке:</div>
+            
+            <div class="check-item"><span>Ровная рама и вилка</span> <input type="checkbox" id="chk1"></div>
+            <div class="check-item"><span>Нет ржавчины на цепи</span> <input type="checkbox" id="chk2"></div>
+            <div class="check-item"><span>Двигатель не стучит</span> <input type="checkbox" id="chk3"></div>
+            <div class="check-item"><span>Ровные диски/колеса</span> <input type="checkbox" id="chk4"></div>
+            <div class="check-item"><span>Электрика работает</span> <input type="checkbox" id="chk5"></div>
+
+            <button class="calc-btn" onclick="calcResult()">Получить вердикт</button>
+            <button class="modal-btn" onclick="closeModal('checkModal')">Отмена</button>
+        </div>
+    </div>
+
+    <script>
+        Telegram.WebApp.ready();
+        Telegram.WebApp.expand();
+
+        const imgPit = "https://images.unsplash.com/photo-1558981403-c5f9899a28bc?auto=format&fit=crop&w=300&q=80";
+        const imgEnd = "https://images.unsplash.com/photo-1558981806-ec527fa84c39?auto=format&fit=crop&w=300&q=80";
+
+        const bikes = [
+            { name: "Kayo T2 250", price: 220000, avg: 210000, type: "best", img: imgEnd, specs: "250сс, воздушка. Лучший баланс.", verdict: "Бери!" },
+            { name: "Kayo K2 250", price: 150000, avg: 145000, type: "best", img: imgPit, specs: "250сс, легкий.", verdict: "Норм тема." },
+            { name: "Kayo TT160", price: 120000, avg: 115000, type: "pitbike", img: imgPit, specs: "160сс, классика.", verdict: "Бери." },
+            { name: "Kayo T4 250", price: 240000, avg: 230000, type: "enduro", img: imgEnd, specs: "250сс, крепкая рама.", verdict: "Хорош." }
+            // Ты можешь добавить остальные из прошлого кода
+        ];
+
+        function renderCatalog(filter) {
+            const grid = document.getElementById('catalog');
+            grid.innerHTML = '';
+            bikes.filter(b => b.type === filter).forEach(bike => {
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.innerHTML = `
+                    <div class="card-img" style="background-image: url('${bike.img}')"></div>
+                    <div class="card-info">
+                        <div class="card-title">${bike.name}</div>
+                        <div class="card-price">${bike.price.toLocaleString('ru-RU')} ₽</div>
+                        <div class="card-sub">Ср. цена: ${bike.avg.toLocaleString('ru-RU')} ₽</div>
+                        <button class="card-btn" onclick="askAI('${bike.name}', '${bike.specs}', '${bike.verdict}', ${bike.price}, ${bike.avg})">🤖 Анализ</button>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        function switchTab(type, element) {
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            element.classList.add('active');
+            renderCatalog(type);
+        }
+
+        function askAI(name, specs, verdictText, price, avg) {
+            document.getElementById('aiTitle').innerText = name;
+            document.getElementById('aiSpecs').innerText = specs;
+            
+            const verdictEl = document.getElementById('aiVerdict');
+            verdictEl.className = 'verdict';
+            
+            if (price < avg * 0.7) {
+                verdictEl.innerText = "⚠️ ПОДОЗРИТЕЛЬНО ДЕШЕВО (Аварийная)";
+                verdictEl.classList.add('bad');
+            } else if (price > avg * 1.2) {
+                verdictEl.innerText = "💸 ОВЕРПРАЙС";
+                verdictEl.classList.add('warn');
+            } else {
+                verdictEl.innerText = "✅ " + verdictText;
+                verdictEl.classList.add('good');
+            }
+            document.getElementById('aiModal').classList.add('show');
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('show');
+        }
+
+        // ЧЕК-ЛИСТ
+        function openChecklist(element) {
+            document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+            element.classList.add('active');
+            document.getElementById('checkModal').classList.add('show');
+        }
+
+        function calcResult() {
+            let score = 0;
+            if(document.getElementById('chk1').checked) score++;
+            if(document.getElementById('chk2').checked) score++;
+            if(document.getElementById('chk3').checked) score++;
+            if(document.getElementById('chk4').checked) score++;
+            if(document.getElementById('chk5').checked) score++;
+
+            let text = "";
+            let color = "";
+            
+            if (score === 5) { text = "🔥 ИДЕАЛ! Можешь брать, если цена норм."; color = "#00ff88"; }
+            else if (score >= 3) { text = "👍 Норм состояние, но поторгуйся."; color = "#00bfff"; }
+            else if (score === 2) { text = "⚠️ Есть проблемы. Готовься вкладывать деньги."; color = "#ffc107"; }
+            else { text = "💀 ХЛАМ! Не бери, это аварийная."; color = "#ff3b5c"; }
+
+            const modal = document.getElementById('checkModal');
+            modal.querySelector('.modal-content').innerHTML = `
+                <div class="modal-title">Результат оценки</div>
+                <div class="verdict" style="color:${color}; border-color:${color}; background:${color}20;">${text}</div>
+                <button class="modal-btn" onclick="window.location.reload()">Пройти заново</button>
+            `;
+        }
+
+        renderCatalog('best');
+    </script>
+</body>
+</html>
